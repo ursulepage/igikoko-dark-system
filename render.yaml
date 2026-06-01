@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: igikoko-dark-system
+    runtime: node
+    repo: https://github.com/ursulepage/igikoko-dark-system
+    branch: main
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
