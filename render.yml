@@ -1,0 +1,7 @@
+services:
+  - type: static
+    name: igikoko-dark-system
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: true
