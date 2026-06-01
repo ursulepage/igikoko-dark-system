@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: igikoko-dark-system
+    runtime: node
+    startCommand: npm run preview
+    buildCommand: npm run build
+    envVars:
+      - key: NODE_ENV
+        value: production
