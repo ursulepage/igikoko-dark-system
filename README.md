@@ -1,16 +1,63 @@
-# React + Vite
+# igikoko-dark-system
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React + Vite application featuring a dark theme system with real-time communication capabilities.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Frontend:** React 19, Vite, Tailwind CSS
+- **Real-time:** Supabase, Simple Peer (WebRTC)
+- **UI Components:** Lucide React, Emoji Picker React
+- **Routing:** React Router DOM
+- **Notifications:** React Hot Toast
+- **Linting:** ESLint with React support
 
-## React Compiler
+## Project Structure
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```
+├── src/                 # Source code
+├── public/             # Static assets
+├── eslint.config.js    # ESLint configuration
+├── vite.config.js      # Vite configuration
+├── render.yaml         # Render deployment config
+└── package.json        # Project dependencies
+```
 
-## Expanding the ESLint configuration
+## Scripts
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run lint` - Run ESLint
+- `npm run preview` - Preview production build
+
+## Getting Started
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Start development server:
+   ```bash
+   npm run dev
+   ```
+
+3. Build for production:
+   ```bash
+   npm run build
+   ```
+
+## Language Composition
+
+- JavaScript: 98.7%
+- HTML: 1.3%
+
+## Deployment
+
+This project is configured for deployment on Render using `render.yaml`. The build creates an optimized production bundle with:
+- Vite bundling and optimization
+- Tailwind CSS purging
+- ESLint validation
+
+## License
+
+ISC
