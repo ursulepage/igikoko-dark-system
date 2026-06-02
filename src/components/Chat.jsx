@@ -4,11 +4,11 @@ import {
   Send, Paperclip, Smile, Download, Trash2, Reply, Edit2, X, Loader2, 
   Phone, Video, Hash, Users, LogOut, Menu, Search, Moon, Sun, MessageCircle,
   Mic, MicOff, VideoOff, PhoneOff, Monitor, Maximize, Minimize,
-  Image, FileText, Music, FileArchive, Eye, Play, Pause, Volume2,
-  Check, CheckCheck, Clock, Bell, BellRing
+  Image, FileText, Music, FileArchive, Eye, Play, Pause,
+  Check, CheckCheck, Bell, BellRing, BellDot, UserPlus, SendHorizontal,
+  PhoneIncoming, PhoneOutgoing, PhoneCall
 } from 'lucide-react'
 import { Logo } from './Logo'
-import { EmojiPicker } from './EmojiPicker'
 
 // ============================================
 // CUSTOM SCROLLBAR CSS
@@ -33,16 +33,222 @@ const scrollbarStyles = `
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
-  .animate-fadeIn {
-    animation: fadeIn 0.3s ease-out;
+  @keyframes bubblePop {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
   }
+  @keyframes typingPulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+  @keyframes pulseRed {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+  }
+  .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+  .animate-bubblePop { animation: bubblePop 0.4s ease-out; }
+  .animate-typing { animation: typingPulse 1s infinite; }
+  .animate-pulse-red { animation: pulseRed 1.5s infinite; }
 `
 
-// Inject styles
 if (typeof document !== 'undefined') {
   const style = document.createElement('style')
   style.textContent = scrollbarStyles
   document.head.appendChild(style)
+}
+
+// ============================================
+// EMOJI PICKER COMPONENT
+// ============================================
+function EmojiPicker({ onSelectEmoji, onClose }) {
+  const emojis = ['😀', '😂', '🥰', '😎', '🤔', '😭', '😡', '🥳', '👍', '❤️', '🔥', '🎉', '✨', '💀', '👀', '🙏']
+
+  return (
+    <div className="absolute bottom-full right-0 mb-2 bg-gray-800 rounded-2xl p-3 shadow-2xl z-50 w-64">
+      <div className="grid grid-cols-8 gap-1">
+        {emojis.map(emoji => (
+          <button key={emoji} onClick={() => { onSelectEmoji(emoji); onClose() }} className="w-8 h-8 hover:bg-gray-700 rounded-lg text-xl transition-colors">
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// FLOATING NOTIFICATION COMPONENT
+// ============================================
+function FloatingNotification({ notification, onClick }) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`notif-${notification.id}`)
+      if (el) el.remove()
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [notification.id])
+
+  return (
+    <div 
+      id={`notif-${notification.id}`}
+      className="fixed top-20 right-4 z-50 animate-bubblePop cursor-pointer" 
+      onClick={() => onClick(notification)}
+    >
+      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-4 shadow-2xl max-w-sm border border-white/20">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+            {notification.type === 'message' ? <MessageCircle className="w-5 h-5 text-white" /> : 
+             notification.type === 'call' ? <Phone className="w-5 h-5 text-white" /> :
+             <BellRing className="w-5 h-5 text-white" />}
+          </div>
+          <div className="flex-1">
+            <p className="text-white font-semibold text-sm">{notification.title}</p>
+            <p className="text-white/80 text-xs">{notification.body}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// TYPING INDICATOR COMPONENT
+// ============================================
+function TypingIndicator({ typingUsers }) {
+  if (Object.keys(typingUsers).length === 0) return null
+  
+  const names = Object.values(typingUsers)
+  let text = ''
+  if (names.length === 1) text = `${names[0]} is typing...`
+  else if (names.length === 2) text = `${names[0]} and ${names[1]} are typing...`
+  else if (names.length > 2) text = `${names.length} people are typing...`
+  
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 text-sm text-emerald-400 bg-black/20 rounded-lg">
+      <div className="flex gap-1">
+        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-typing"></span>
+        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-typing" style={{ animationDelay: '0.2s' }}></span>
+        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-typing" style={{ animationDelay: '0.4s' }}></span>
+      </div>
+      <span>{text}</span>
+    </div>
+  )
+}
+
+// ============================================
+// INCOMING CALL COMPONENT
+// ============================================
+function IncomingCall({ caller, onAnswer, onDecline, callType }) {
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-50 flex items-center justify-center p-4 animate-fadeIn">
+      <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-2xl p-8 max-w-md w-full text-center border border-emerald-500/30 shadow-2xl">
+        <div className={`w-20 h-20 ${callType === 'video' ? 'bg-gradient-to-r from-emerald-500 to-teal-600' : 'bg-gradient-to-r from-purple-500 to-pink-600'} rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse-red`}>
+          {callType === 'video' ? <Video className="w-10 h-10 text-white" /> : <Phone className="w-10 h-10 text-white" />}
+        </div>
+        <h2 className="text-2xl text-white font-bold mb-2">Incoming {callType === 'video' ? 'Video' : 'Audio'} Call</h2>
+        <p className="text-gray-400 mb-6">from <span className="text-emerald-400 font-semibold">{caller}</span></p>
+        <div className="flex gap-4 justify-center">
+          <button onClick={onAnswer} className="px-6 py-3 bg-emerald-500 rounded-xl text-white font-medium hover:bg-emerald-600 transition flex items-center gap-2 shadow-lg">
+            <Phone className="w-5 h-5" /> Answer
+          </button>
+          <button onClick={onDecline} className="px-6 py-3 bg-red-500 rounded-xl text-white font-medium hover:bg-red-600 transition flex items-center gap-2 shadow-lg">
+            <PhoneOff className="w-5 h-5" /> Decline
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// VIDEO CALL COMPONENT
+// ============================================
+function VideoCall({ onEndCall, currentUser }) {
+  const [localStream, setLocalStream] = useState(null)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isVideoOff, setIsVideoOff] = useState(false)
+  const [isSharingScreen, setIsSharingScreen] = useState(false)
+  const [callDuration, setCallDuration] = useState(0)
+  const localVideoRef = useRef(null)
+
+  useEffect(() => {
+    startCall()
+    const timer = setInterval(() => setCallDuration(d => d + 1), 1000)
+    return () => {
+      clearInterval(timer)
+      if (localStream) localStream.getTracks().forEach(track => track.stop())
+    }
+  }, [])
+
+  const startCall = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      setLocalStream(stream)
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream
+    } catch (err) { console.error("Camera error:", err) }
+  }
+
+  const toggleScreenShare = async () => {
+    try {
+      if (!isSharingScreen) {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+        if (localVideoRef.current) localVideoRef.current.srcObject = screenStream
+        setIsSharingScreen(true)
+      } else {
+        setIsSharingScreen(false)
+        if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream
+      }
+    } catch (err) { console.error("Screen share error:", err) }
+  }
+
+  const formatDuration = (seconds) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
+
+  return (
+    <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-50 flex items-center justify-center">
+      <div className="relative w-full max-w-6xl">
+        <div className="bg-gray-900 rounded-2xl overflow-hidden aspect-video">
+          <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+        </div>
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-3 bg-black/60 backdrop-blur-xl rounded-full p-3 shadow-2xl">
+          <button onClick={() => { localStream?.getAudioTracks().forEach(t => t.enabled = !t.enabled); setIsMuted(!isMuted) }} className={`w-12 h-12 rounded-full flex items-center justify-center ${isMuted ? 'bg-red-500' : 'bg-gray-700'}`}>
+            {isMuted ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5 text-white" />}
+          </button>
+          <button onClick={() => { localStream?.getVideoTracks().forEach(t => t.enabled = !t.enabled); setIsVideoOff(!isVideoOff) }} className={`w-12 h-12 rounded-full flex items-center justify-center ${isVideoOff ? 'bg-red-500' : 'bg-gray-700'}`}>
+            {isVideoOff ? <VideoOff className="w-5 h-5 text-white" /> : <Video className="w-5 h-5 text-white" />}
+          </button>
+          <button onClick={toggleScreenShare} className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center"><Monitor className="w-5 h-5 text-white" /></button>
+          <button onClick={onEndCall} className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center animate-pulse"><PhoneOff className="w-5 h-5 text-white" /></button>
+        </div>
+        <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-xl rounded-full px-4 py-2"><p className="text-white text-sm">Call with {currentUser} • {formatDuration(callDuration)}</p></div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// AUDIO CALL COMPONENT
+// ============================================
+function AudioCall({ onEndCall, currentUser }) {
+  const [duration, setDuration] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setDuration(d => d + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
+
+  return (
+    <div className="fixed inset-0 bg-gradient-to-br from-gray-900 to-slate-900 backdrop-blur-xl z-50 flex items-center justify-center">
+      <div className="text-center p-8 rounded-2xl bg-white/5 backdrop-blur-2xl border border-white/10 max-w-md w-full">
+        <div className="w-28 h-28 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse"><Phone className="w-12 h-12 text-white" /></div>
+        <h2 className="text-2xl text-white font-bold mb-2">Audio Call</h2>
+        <p className="text-gray-400 mb-2">Call with <span className="text-emerald-400">{currentUser}</span></p>
+        <p className="text-3xl text-emerald-400 font-mono mb-8">{formatTime(duration)}</p>
+        <button onClick={onEndCall} className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center mx-auto animate-pulse"><PhoneOff className="w-6 h-6 text-white" /></button>
+      </div>
+    </div>
+  )
 }
 
 // ============================================
@@ -171,130 +377,6 @@ function AudioRecorder({ onRecordingComplete, onClose }) {
 }
 
 // ============================================
-// VIDEO CALL COMPONENT
-// ============================================
-function VideoCall({ onEndCall, currentUser, onAnswer, onDecline, isIncoming }) {
-  const [localStream, setLocalStream] = useState(null)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isVideoOff, setIsVideoOff] = useState(false)
-  const [isSharingScreen, setIsSharingScreen] = useState(false)
-  const [callDuration, setCallDuration] = useState(0)
-  const localVideoRef = useRef(null)
-
-  useEffect(() => {
-    if (!isIncoming) startCall()
-    const timer = setInterval(() => setCallDuration(d => d + 1), 1000)
-    return () => {
-      clearInterval(timer)
-      if (localStream) localStream.getTracks().forEach(track => track.stop())
-    }
-  }, [])
-
-  const startCall = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      setLocalStream(stream)
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream
-    } catch (err) { console.error("Camera error:", err) }
-  }
-
-  const toggleScreenShare = async () => {
-    try {
-      if (!isSharingScreen) {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true })
-        if (localVideoRef.current) localVideoRef.current.srcObject = screenStream
-        setIsSharingScreen(true)
-      } else {
-        setIsSharingScreen(false)
-        if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream
-      }
-    } catch (err) { console.error("Screen share error:", err) }
-  }
-
-  const formatDuration = (seconds) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
-
-  if (isIncoming) {
-    return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-50 flex items-center justify-center">
-        <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full text-center">
-          <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <Phone className="w-10 h-10 text-white" />
-          </div>
-          <h2 className="text-2xl text-white font-bold mb-2">Incoming Video Call</h2>
-          <p className="text-gray-400 mb-6">from <span className="text-emerald-400">{currentUser}</span></p>
-          <div className="flex gap-4 justify-center">
-            <button onClick={onAnswer} className="px-6 py-3 bg-emerald-500 rounded-xl text-white font-medium hover:bg-emerald-600 transition flex items-center gap-2"><Phone className="w-5 h-5" /> Answer</button>
-            <button onClick={onDecline} className="px-6 py-3 bg-red-500 rounded-xl text-white font-medium hover:bg-red-600 transition flex items-center gap-2"><PhoneOff className="w-5 h-5" /> Decline</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-50 flex items-center justify-center">
-      <div className="relative w-full max-w-6xl">
-        <div className="bg-gray-900 rounded-2xl overflow-hidden aspect-video">
-          <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-        </div>
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-3 bg-black/60 backdrop-blur-xl rounded-full p-3 shadow-2xl">
-          <button onClick={() => { localStream?.getAudioTracks().forEach(t => t.enabled = !t.enabled); setIsMuted(!isMuted) }} className={`w-12 h-12 rounded-full flex items-center justify-center ${isMuted ? 'bg-red-500' : 'bg-gray-700'}`}>
-            {isMuted ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5 text-white" />}
-          </button>
-          <button onClick={() => { localStream?.getVideoTracks().forEach(t => t.enabled = !t.enabled); setIsVideoOff(!isVideoOff) }} className={`w-12 h-12 rounded-full flex items-center justify-center ${isVideoOff ? 'bg-red-500' : 'bg-gray-700'}`}>
-            {isVideoOff ? <VideoOff className="w-5 h-5 text-white" /> : <Video className="w-5 h-5 text-white" />}
-          </button>
-          <button onClick={toggleScreenShare} className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center"><Monitor className="w-5 h-5 text-white" /></button>
-          <button onClick={onEndCall} className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center animate-pulse"><PhoneOff className="w-5 h-5 text-white" /></button>
-        </div>
-        <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-xl rounded-full px-4 py-2"><p className="text-white text-sm">Call with {currentUser} • {formatDuration(callDuration)}</p></div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// AUDIO CALL COMPONENT
-// ============================================
-function AudioCall({ onEndCall, currentUser, onAnswer, onDecline, isIncoming }) {
-  const [duration, setDuration] = useState(0)
-  useEffect(() => {
-    const timer = setInterval(() => setDuration(d => d + 1), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
-
-  if (isIncoming) {
-    return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-50 flex items-center justify-center">
-        <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full text-center">
-          <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Phone className="w-10 h-10 text-white" /></div>
-          <h2 className="text-2xl text-white font-bold mb-2">Incoming Audio Call</h2>
-          <p className="text-gray-400 mb-6">from <span className="text-emerald-400">{currentUser}</span></p>
-          <div className="flex gap-4 justify-center">
-            <button onClick={onAnswer} className="px-6 py-3 bg-emerald-500 rounded-xl text-white font-medium hover:bg-emerald-600 transition flex items-center gap-2"><Phone className="w-5 h-5" /> Answer</button>
-            <button onClick={onDecline} className="px-6 py-3 bg-red-500 rounded-xl text-white font-medium hover:bg-red-600 transition flex items-center gap-2"><PhoneOff className="w-5 h-5" /> Decline</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="fixed inset-0 bg-gradient-to-br from-gray-900 to-slate-900 backdrop-blur-xl z-50 flex items-center justify-center">
-      <div className="text-center p-8 rounded-2xl bg-white/5 backdrop-blur-2xl border border-white/10 max-w-md w-full">
-        <div className="w-28 h-28 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse"><Phone className="w-12 h-12 text-white" /></div>
-        <h2 className="text-2xl text-white font-bold mb-2">Audio Call</h2>
-        <p className="text-gray-400 mb-2">Call with <span className="text-emerald-400">{currentUser}</span></p>
-        <p className="text-3xl text-emerald-400 font-mono mb-8">{formatTime(duration)}</p>
-        <button onClick={onEndCall} className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center mx-auto animate-pulse"><PhoneOff className="w-6 h-6 text-white" /></button>
-      </div>
-    </div>
-  )
-}
-
-// ============================================
 // MAIN CHAT COMPONENT
 // ============================================
 export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
@@ -325,9 +407,8 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
   const [previewFile, setPreviewFile] = useState(null)
   const [showAudioRecorder, setShowAudioRecorder] = useState(false)
   const [unreadCounts, setUnreadCounts] = useState({})
-  const [lastReadTimes, setLastReadTimes] = useState({})
-  const [publicMessagesChannel, setPublicMessagesChannel] = useState(null)
-  const [privateMessagesChannel, setPrivateMessagesChannel] = useState(null)
+  const [floatingNotifications, setFloatingNotifications] = useState([])
+  const [typingUsers, setTypingUsers] = useState({})
 
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -340,24 +421,54 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
   useEffect(() => {
     const saved = localStorage.getItem(`unread_${session.user.id}`)
     if (saved) setUnreadCounts(JSON.parse(saved))
-    const savedTimes = localStorage.getItem(`lastRead_${session.user.id}`)
-    if (savedTimes) setLastReadTimes(JSON.parse(savedTimes))
   }, [session.user.id])
 
-  // Save unread counts
   useEffect(() => {
     localStorage.setItem(`unread_${session.user.id}`, JSON.stringify(unreadCounts))
   }, [unreadCounts, session.user.id])
 
-  useEffect(() => {
-    localStorage.setItem(`lastRead_${session.user.id}`, JSON.stringify(lastReadTimes))
-  }, [lastReadTimes, session.user.id])
-
-  // Mark conversation as read
   const markAsRead = (conversationId, type) => {
     const key = `${type}_${conversationId}`
     setUnreadCounts(prev => ({ ...prev, [key]: 0 }))
-    setLastReadTimes(prev => ({ ...prev, [key]: Date.now() }))
+  }
+
+  const addFloatingNotification = (title, body, type, onClickData) => {
+    const id = Date.now()
+    setFloatingNotifications(prev => [...prev, { id, title, body, type, onClickData }])
+    setTimeout(() => {
+      setFloatingNotifications(prev => prev.filter(n => n.id !== id))
+    }, 5000)
+  }
+
+  const handleNotificationClick = (notification) => {
+    if (notification.type === 'message' && notification.onClickData) {
+      if (notification.onClickData.type === 'public') {
+        setActiveTab('public')
+        setCurrentRoom(rooms.find(r => r.id === notification.onClickData.roomId))
+        setPrivateChatUser(null)
+        markAsRead(notification.onClickData.roomId, 'public')
+      } else if (notification.onClickData.type === 'private') {
+        setActiveTab('private')
+        setPrivateChatUser(users.find(u => u.id === notification.onClickData.userId))
+        setCurrentRoom(null)
+        markAsRead(notification.onClickData.userId, 'private')
+      }
+    } else if (notification.type === 'call') {
+      // Focus on the caller for call
+      setActiveTab('private')
+      setPrivateChatUser(users.find(u => u.id === notification.onClickData?.userId))
+      setCurrentRoom(null)
+    }
+  }
+
+  const broadcastTyping = async (isTypingNow, chatType, chatId) => {
+    if (privateChannel && chatType === 'private' && privateChatUser) {
+      await privateChannel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { from: session.user.id, to: privateChatUser.id, isTyping: isTypingNow, username: getUserName(session.user.id) }
+      })
+    }
   }
 
   useEffect(() => {
@@ -373,15 +484,15 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
   useEffect(() => {
     loadRooms()
     loadUsers()
-    loadPrivateChats()
-    setupRealtimeSubscriptions()
-    
-    // Cleanup on unmount
-    return () => {
-      if (publicMessagesChannel) supabase.removeChannel(publicMessagesChannel)
-      if (privateMessagesChannel) supabase.removeChannel(privateMessagesChannel)
-    }
   }, [])
+
+  useEffect(() => {
+    setupRealtimeSubscriptions()
+    return () => {
+      if (publicChannel) supabase.removeChannel(publicChannel)
+      if (privateChannel) supabase.removeChannel(privateChannel)
+    }
+  }, [currentRoom, privateChatUser])
 
   useEffect(() => {
     if (activeTab === 'public' && currentRoom) {
@@ -402,60 +513,89 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
   }, [messages])
 
   const setupRealtimeSubscriptions = async () => {
-    // Clean up existing channels
-    if (publicMessagesChannel) await supabase.removeChannel(publicMessagesChannel)
-    if (privateMessagesChannel) await supabase.removeChannel(privateMessagesChannel)
+    if (publicChannel) await supabase.removeChannel(publicChannel)
+    if (privateChannel) await supabase.removeChannel(privateChannel)
 
-    // Public channel for real-time messages - ADD EVENTS BEFORE SUBSCRIBE
-    const publicRealtime = supabase
-      .channel('public-messages')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'messages' }, 
-        (payload) => {
-          const newMsg = payload.new
+    // PUBLIC CHANNEL
+    const newPublicChannel = supabase.channel('public-messages')
+    newPublicChannel.on('postgres_changes', 
+      { event: 'INSERT', schema: 'public', table: 'messages' }, 
+      (payload) => {
+        const newMsg = payload.new
+        if (currentRoom?.id === newMsg.room_id) {
           setMessages(prev => [...prev, newMsg])
-          if (currentRoom?.id === newMsg.room_id && newMsg.user_id !== session.user.id) {
-            // Already in this room, message appears
-          } else if (newMsg.user_id !== session.user.id) {
-            const key = `public_${newMsg.room_id}`
-            setUnreadCounts(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }))
-          }
         }
-      )
-    
-    // Subscribe AFTER adding events
-    publicRealtime.subscribe()
-    setPublicMessagesChannel(publicRealtime)
+        if (newMsg.user_id !== session.user.id) {
+          const key = `public_${newMsg.room_id}`
+          setUnreadCounts(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }))
+          const room = rooms.find(r => r.id === newMsg.room_id)
+          addFloatingNotification(
+            `💬 New message in ${room?.name || 'Chat'}`, 
+            `${getUserName(newMsg.user_id)}: ${newMsg.message?.slice(0, 50) || 'Sent a file'}`,
+            'message',
+            { type: 'public', roomId: newMsg.room_id }
+          )
+        }
+      }
+    )
+    newPublicChannel.subscribe()
+    setPublicChannel(newPublicChannel)
 
-    // Private messages via broadcast - ADD EVENTS BEFORE SUBSCRIBE
-    const privateRealtime = supabase
-      .channel('private-messages')
-      .on('broadcast', { event: 'private-message' }, (payload) => {
-        const { message, fromUserId, toUserId } = payload.payload
-        if (toUserId === session.user.id) {
-          if (privateChatUser?.id === fromUserId) {
-            setMessages(prev => [...prev, message])
-          }
-          const key = `private_${fromUserId}`
-          if (privateChatUser?.id !== fromUserId) {
-            setUnreadCounts(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }))
-          }
-          // Save to localStorage
-          const storageKey = [session.user.id, fromUserId].sort().join('-')
-          const stored = JSON.parse(localStorage.getItem(`privchat_${storageKey}`) || '[]')
-          localStorage.setItem(`privchat_${storageKey}`, JSON.stringify([...stored, message]))
+    // PRIVATE CHANNEL
+    const newPrivateChannel = supabase.channel('private-messages')
+    newPrivateChannel.on('broadcast', { event: 'private-message' }, (payload) => {
+      const { message, fromUserId, toUserId } = payload.payload
+      if (toUserId === session.user.id) {
+        if (privateChatUser?.id === fromUserId) {
+          setMessages(prev => [...prev, message])
         }
-      })
-      .on('broadcast', { event: 'call-request' }, (payload) => {
-        const { from, type } = payload.payload
-        if (from !== session.user.id) {
-          setIncomingCall({ from, type, fromUser: users.find(u => u.id === from) })
-        }
-      })
-    
-    // Subscribe AFTER adding events
-    privateRealtime.subscribe()
-    setPrivateMessagesChannel(privateRealtime)
+        const key = `private_${fromUserId}`
+        const newCount = (unreadCounts[key] || 0) + 1
+        setUnreadCounts(prev => ({ ...prev, [key]: newCount }))
+        addFloatingNotification(
+          `💌 New private message from ${getUserName(fromUserId)}`,
+          message.message?.slice(0, 50) || 'Sent a message',
+          'message',
+          { type: 'private', userId: fromUserId }
+        )
+        
+        const storageKey = [session.user.id, fromUserId].sort().join('-')
+        const stored = JSON.parse(localStorage.getItem(`privchat_${storageKey}`) || '[]')
+        localStorage.setItem(`privchat_${storageKey}`, JSON.stringify([...stored, message]))
+      }
+    })
+    newPrivateChannel.on('broadcast', { event: 'typing' }, (payload) => {
+      const { from, isTyping, username } = payload.payload
+      if (from !== session.user.id) {
+        setTypingUsers(prev => {
+          const newState = { ...prev }
+          if (isTyping) newState[from] = username
+          else delete newState[from]
+          return newState
+        })
+        setTimeout(() => {
+          setTypingUsers(prev => {
+            const newState = { ...prev }
+            delete newState[from]
+            return newState
+          })
+        }, 3000)
+      }
+    })
+    newPrivateChannel.on('broadcast', { event: 'call-request' }, (payload) => {
+      const { from, type, fromUsername } = payload.payload
+      if (from !== session.user.id) {
+        setIncomingCall({ from, type, fromUser: { username: fromUsername, id: from } })
+        addFloatingNotification(
+          `📞 Incoming ${type} call`,
+          `From: ${fromUsername}`,
+          'call',
+          { type: 'call', userId: from }
+        )
+      }
+    })
+    newPrivateChannel.subscribe()
+    setPrivateChannel(newPrivateChannel)
   }
 
   async function loadRooms() {
@@ -470,11 +610,6 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
   }
 
   async function loadUsers() {
-    const { data } = await supabase.from('users').select('*')
-    if (data) setUsers(data.filter(u => u.id !== session.user.id))
-  }
-
-  async function loadPrivateChats() {
     const { data } = await supabase.from('users').select('*')
     if (data) setUsers(data.filter(u => u.id !== session.user.id))
   }
@@ -504,16 +639,14 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
     
     setMessages(prev => [...prev, newMsg])
     
-    // Send via broadcast
-    if (privateMessagesChannel) {
-      await privateMessagesChannel.send({
+    if (privateChannel) {
+      await privateChannel.send({
         type: 'broadcast',
         event: 'private-message',
         payload: { message: newMsg, fromUserId: session.user.id, toUserId: privateChatUser.id }
       })
     }
     
-    // Store in localStorage
     const key = [session.user.id, privateChatUser.id].sort().join('-')
     const stored = JSON.parse(localStorage.getItem(`privchat_${key}`) || '[]')
     localStorage.setItem(`privchat_${key}`, JSON.stringify([...stored, newMsg]))
@@ -539,8 +672,8 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
           file_name: file.name
         }
         setMessages(prev => [...prev, newMsg])
-        if (privateMessagesChannel) {
-          await privateMessagesChannel.send({
+        if (privateChannel) {
+          await privateChannel.send({
             type: 'broadcast',
             event: 'private-message',
             payload: { message: newMsg, fromUserId: session.user.id, toUserId: privateChatUser.id }
@@ -601,18 +734,22 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
   const handleTyping = () => {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     setIsTyping(true)
-    typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1000)
+    broadcastTyping(true, activeTab, activeTab === 'public' ? currentRoom?.id : privateChatUser?.id)
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false)
+      broadcastTyping(false, activeTab, activeTab === 'public' ? currentRoom?.id : privateChatUser?.id)
+    }, 1000)
   }
 
   const startVideoCall = (user) => {
     setCallWith(user)
     setCallType('video')
     setIsVideoCall(true)
-    if (privateMessagesChannel) {
-      privateMessagesChannel.send({
+    if (privateChannel) {
+      privateChannel.send({
         type: 'broadcast',
         event: 'call-request',
-        payload: { from: session.user.id, to: user.id, type: 'video' }
+        payload: { from: session.user.id, to: user.id, type: 'video', fromUsername: getUserName(session.user.id) }
       })
     }
   }
@@ -621,11 +758,11 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
     setCallWith(user)
     setCallType('audio')
     setIsAudioCall(true)
-    if (privateMessagesChannel) {
-      privateMessagesChannel.send({
+    if (privateChannel) {
+      privateChannel.send({
         type: 'broadcast',
         event: 'call-request',
-        payload: { from: session.user.id, to: user.id, type: 'audio' }
+        payload: { from: session.user.id, to: user.id, type: 'audio', fromUsername: getUserName(session.user.id) }
       })
     }
   }
@@ -699,14 +836,56 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
     )
   }
 
+  // Dynamic sorting: unread first, then by last message time
+  const getSortedRooms = () => {
+    const roomsWithInfo = rooms.map(room => ({
+      ...room,
+      unread: unreadCounts[`public_${room.id}`] || 0,
+      lastMessageTime: messages.filter(m => m.room_id === room.id).pop()?.created_at || room.created_at
+    }))
+    return roomsWithInfo.sort((a, b) => {
+      if (a.unread > 0 && b.unread === 0) return -1
+      if (a.unread === 0 && b.unread > 0) return 1
+      return new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+    })
+  }
+
+  const getSortedUsers = () => {
+    const usersWithInfo = users.map(user => {
+      const key = [session.user.id, user.id].sort().join('-')
+      const privateMsgList = JSON.parse(localStorage.getItem(`privchat_${key}`) || '[]')
+      return {
+        ...user,
+        unread: unreadCounts[`private_${user.id}`] || 0,
+        lastMessageTime: privateMsgList.pop()?.created_at || user.created_at
+      }
+    })
+    return usersWithInfo.sort((a, b) => {
+      if (a.unread > 0 && b.unread === 0) return -1
+      if (a.unread === 0 && b.unread > 0) return 1
+      return new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+    })
+  }
+
+  const sortedRooms = getSortedRooms()
+  const sortedUsers = getSortedUsers()
+
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950' : 'bg-gradient-to-br from-gray-100 via-purple-100 to-gray-100'}`}>
-      {isVideoCall && callWith && <VideoCall onEndCall={endCall} currentUser={callWith.username} callType="video" />}
+      {/* Floating Notifications */}
+      {floatingNotifications.map(notif => (
+        <FloatingNotification key={notif.id} notification={notif} onClick={handleNotificationClick} />
+      ))}
+
+      {isVideoCall && callWith && <VideoCall onEndCall={endCall} currentUser={callWith.username} />}
       {isAudioCall && callWith && <AudioCall onEndCall={endCall} currentUser={callWith.username} />}
       {incomingCall && (
-        incomingCall.type === 'video' ? 
-          <VideoCall isIncoming={true} currentUser={incomingCall.fromUser?.username} onAnswer={answerCall} onDecline={declineCall} /> :
-          <AudioCall isIncoming={true} currentUser={incomingCall.fromUser?.username} onAnswer={answerCall} onDecline={declineCall} />
+        <IncomingCall 
+          caller={incomingCall.fromUser?.username} 
+          callType={incomingCall.type}
+          onAnswer={answerCall}
+          onDecline={declineCall}
+        />
       )}
       {previewFile && <FilePreview fileUrl={previewFile.url} fileName={previewFile.name} onClose={() => setPreviewFile(null)} />}
       {showAudioRecorder && <AudioRecorder onRecordingComplete={handleAudioRecordingComplete} onClose={() => setShowAudioRecorder(false)} />}
@@ -738,7 +917,7 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
           </div>
 
           <div className="flex gap-2 mb-4 bg-black/30 rounded-xl p-1">
-            <button onClick={() => { setActiveTab('public'); setPrivateChatUser(null); setMessages([]); markAsRead(currentRoom?.id, 'public') }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${activeTab === 'public' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white' : 'text-gray-400'}`}>
+            <button onClick={() => { setActiveTab('public'); setPrivateChatUser(null); setMessages([]) }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${activeTab === 'public' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white' : 'text-gray-400'}`}>
               <Hash className="w-4 h-4 inline mr-1" /> Public
             </button>
             <button onClick={() => { setActiveTab('private'); setCurrentRoom(null); setMessages([]) }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${activeTab === 'private' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white' : 'text-gray-400'}`}>
@@ -749,7 +928,7 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
           {activeTab === 'public' && (
             <div className="space-y-1 max-h-[300px] overflow-y-auto custom-scroll">
               <h3 className="text-xs text-gray-400 px-3 py-2">CHAT ROOMS</h3>
-              {rooms.map(room => {
+              {sortedRooms.map(room => {
                 const unread = unreadCounts[`public_${room.id}`] || 0
                 return (
                   <button 
@@ -762,7 +941,7 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
                       {sidebarOpen && <span>{room.name}</span>}
                     </div>
                     {unread > 0 && (
-                      <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">{unread}</span>
+                      <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse-red">{unread > 99 ? '99+' : unread}</span>
                     )}
                   </button>
                 )
@@ -773,7 +952,7 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
           {activeTab === 'private' && (
             <div className="space-y-1 max-h-[300px] overflow-y-auto custom-scroll">
               <h3 className="text-xs text-gray-400 px-3 py-2">USERS - CLICK TO CHAT</h3>
-              {filteredUsers.map(user => {
+              {sortedUsers.filter(u => u.username?.toLowerCase().includes(searchTerm.toLowerCase())).map(user => {
                 const unread = unreadCounts[`private_${user.id}`] || 0
                 return (
                   <div key={user.id} className="flex items-center gap-2 mb-1">
@@ -787,7 +966,7 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
                           <div className="flex items-center justify-between">
                             <p className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{user.username}</p>
                             {unread > 0 && (
-                              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">{unread}</span>
+                              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse-red">{unread > 99 ? '99+' : unread}</span>
                             )}
                           </div>
                           <p className="text-xs text-gray-500">{user.email}</p>
@@ -843,7 +1022,7 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
                     )}
                     <div>
                       <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{activeTab === 'public' ? currentRoom.name : privateChatUser.username}</h2>
-                      <p className="text-gray-400 text-sm">{activeTab === 'public' ? 'Public Channel • Real-time' : 'Private Chat • Real-time • Encrypted'}</p>
+                      <p className="text-gray-400 text-sm">{activeTab === 'public' ? 'Public Channel • Real-time' : 'Private Chat • Encrypted'}</p>
                     </div>
                   </div>
                   {activeTab === 'private' && privateChatUser && (
@@ -853,6 +1032,7 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
                     </div>
                   )}
                 </div>
+                <TypingIndicator typingUsers={typingUsers} />
               </div>
               
               <div className={`${isDarkMode ? 'bg-black/40' : 'bg-white/40'} backdrop-blur-2xl rounded-2xl border border-white/10 mb-4 overflow-hidden`}>
@@ -912,7 +1092,6 @@ export function Chat({ session, onLogout, onToggleTheme, isDarkMode }) {
                   <input type="text" value={messageText} onChange={(e) => { setMessageText(e.target.value); handleTyping() }} onKeyPress={(e) => e.key === 'Enter' && (activeTab === 'public' ? sendPublicMessage() : sendPrivateMessageRealTime(messageText))} placeholder="Type a message..." className="flex-1 bg-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                   <button onClick={() => activeTab === 'public' ? sendPublicMessage() : sendPrivateMessageRealTime(messageText)} disabled={uploading} className="p-2 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl hover:from-emerald-600 hover:to-teal-700 transition">{uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 text-white" />}</button>
                 </div>
-                {isTyping && <p className="text-xs text-emerald-400 mt-2 animate-pulse">Someone is typing...</p>}
                 {uploadFile && (
                   <div className="mt-2 p-2 bg-emerald-500/20 rounded-lg flex justify-between">
                     <div className="flex items-center gap-2">{getFileIcon(uploadFile.name)}<span className="text-xs text-emerald-400">{uploadFile.name}</span></div>
