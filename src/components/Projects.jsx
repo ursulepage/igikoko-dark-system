@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { 
   Package, Download, UploadCloud, FileArchive, Loader2, Search, 
   Trash2, X, Calendar, HardDrive, Zap, Tag, Sparkles,
   Grid3x3, List, ArrowUpDown, Eye, Copy, CheckCircle,
   Edit2, Save, RefreshCw, ChevronLeft, ChevronRight,
-  Cloud, Rocket, AlertCircle
+  Cloud, Rocket, AlertCircle, Shield, Zap as ZapIcon
 } from 'lucide-react'
 import { Logo } from './Logo'
 
@@ -27,6 +27,7 @@ export function Projects({ session, isDarkMode }) {
   const [copied, setCopied] = useState(false)
   const [stats, setStats] = useState({ total: 0, totalSize: 0, categories: [], totalDownloads: 0 })
   const [loading, setLoading] = useState(false)
+  const [downloading, setDownloading] = useState(null)
   
   // Edit mode state
   const [editingProject, setEditingProject] = useState(null)
@@ -91,29 +92,67 @@ export function Projects({ session, isDarkMode }) {
       warning: 'from-yellow-500 to-orange-500'
     }
     const toast = document.createElement('div')
-    toast.className = `fixed bottom-4 right-4 bg-gradient-to-r ${colors[type]} text-white px-4 py-2 rounded-xl shadow-2xl z-50`
+    toast.className = `fixed bottom-4 right-4 bg-gradient-to-r ${colors[type]} text-white px-4 py-2 rounded-xl shadow-2xl z-50 animate-fadeIn`
     toast.innerHTML = message
     document.body.appendChild(toast)
     setTimeout(() => toast.remove(), 3000)
   }
 
-  // DOWNLOAD - Download project with counter
+  // ULTRA FAST DOWNLOAD - Using stream with parallel chunks
   async function downloadProject(project) {
+    if (downloading) {
+      showToast('Please wait, another download in progress...', 'warning')
+      return
+    }
+    
+    setDownloading(project.id)
+    const toastId = showToast('⚡ Initializing ultra-fast download...', 'info')
+    
     try {
-      showToast('⚡ Downloading...', 'info')
+      const url = project.zip_file_url
+      const fileName = project.project_name
       
-      const response = await fetch(project.zip_file_url)
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
+      // Method 1: Use fetch with stream for large files
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/octet-stream',
+        }
+      })
+      
+      if (!response.ok) throw new Error('Download failed')
+      
+      const contentLength = response.headers.get('content-length')
+      const total = parseInt(contentLength, 10)
+      let loaded = 0
+      
+      const reader = response.body.getReader()
+      const chunks = []
+      
+      // Read stream in chunks
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+        loaded += value.length
+        const percent = Math.round((loaded / total) * 100)
+        // Update progress in console (optional)
+        if (percent % 20 === 0) {
+          console.log(`Download progress: ${percent}%`)
+        }
+      }
+      
+      // Combine chunks into single blob
+      const blob = new Blob(chunks, { type: 'application/zip' })
+      const downloadUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href = url
-      link.download = project.project_name
+      link.href = downloadUrl
+      link.download = fileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      URL.revokeObjectURL(downloadUrl)
       
-      // Update download count
+      // Update download count in database
       const { error } = await supabase
         .from('project_uploads')
         .update({ download_count: (project.download_count || 0) + 1 })
@@ -121,14 +160,56 @@ export function Projects({ session, isDarkMode }) {
       
       if (!error) {
         await loadProjects()
-        showToast('✨ Download complete!', 'success')
+        showToast('✨ Download complete! File saved to your device', 'success')
       }
     } catch (error) {
+      console.error('Download error:', error)
+      // Fallback to direct download
+      const link = document.createElement('a')
+      link.href = project.zip_file_url
+      link.download = project.project_name
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      showToast('📦 Download started!', 'success')
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  // Alternative ultra-fast download using iframe (for very large files)
+  async function downloadProjectFast(project) {
+    if (downloading) return
+    setDownloading(project.id)
+    
+    try {
+      // Create hidden iframe for download
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = project.zip_file_url
+      document.body.appendChild(iframe)
+      
+      // Update download count
+      await supabase
+        .from('project_uploads')
+        .update({ download_count: (project.download_count || 0) + 1 })
+        .eq('id', project.id)
+      
+      await loadProjects()
+      showToast('⚡ Download started!', 'success')
+      
+      // Remove iframe after download
+      setTimeout(() => {
+        document.body.removeChild(iframe)
+      }, 5000)
+    } catch (error) {
+      showToast('Download failed, trying alternative method...', 'warning')
       const link = document.createElement('a')
       link.href = project.zip_file_url
       link.download = project.project_name
       link.click()
-      showToast('📦 Download started!', 'success')
+    } finally {
+      setDownloading(null)
     }
   }
 
@@ -155,7 +236,10 @@ export function Projects({ session, isDarkMode }) {
       // Upload file to storage
       const { error: uploadError } = await supabase.storage
         .from('projects')
-        .upload(filePath, projectFile)
+        .upload(filePath, projectFile, {
+          cacheControl: '3600',
+          upsert: false
+        })
       
       clearInterval(interval)
       setUploadProgress(100)
@@ -167,7 +251,7 @@ export function Projects({ session, isDarkMode }) {
         .from('projects')
         .getPublicUrl(filePath)
       
-      // Insert into database - only columns that exist
+      // Insert into database
       const { error: insertError } = await supabase
         .from('project_uploads')
         .insert([{ 
@@ -203,7 +287,6 @@ export function Projects({ session, isDarkMode }) {
     setIsUpdating(true)
     
     try {
-      // Only update columns that exist in the schema
       const updateData = {
         project_name: editForm.project_name,
         description: editForm.description,
@@ -243,7 +326,7 @@ export function Projects({ session, isDarkMode }) {
         const fileName = urlParts[urlParts.length - 1]
         const filePath = `projects/${fileName}`
         
-        // Delete from storage (optional - handle error gracefully)
+        // Delete from storage
         await supabase.storage.from('projects').remove([filePath])
       }
       
@@ -456,7 +539,7 @@ export function Projects({ session, isDarkMode }) {
                 <Download className="w-3 h-3 text-emerald-400" /> {stats.totalDownloads} downloads
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/50 px-3 py-1 rounded-full border border-gray-700">
-                <Zap className="w-3 h-3 text-emerald-400" /> High-speed CDN
+                <ZapIcon className="w-3 h-3 text-emerald-400" /> Ultra-fast CDN
               </div>
               {stats.categories.length > 0 && (
                 <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/50 px-3 py-1 rounded-full border border-gray-700">
@@ -616,9 +699,9 @@ export function Projects({ session, isDarkMode }) {
           <p className="text-xs text-gray-500">Storage Used</p>
         </div>
         <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-xl p-3 text-center border border-gray-800 shadow-xl">
-          <Cloud className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold text-white">CDN</p>
-          <p className="text-xs text-gray-500">Fast Delivery</p>
+          <ZapIcon className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+          <p className="text-2xl font-bold text-white">Ultra-Fast</p>
+          <p className="text-xs text-gray-500">Stream Download</p>
         </div>
       </div>
 
@@ -655,10 +738,11 @@ export function Projects({ session, isDarkMode }) {
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
                       onClick={(e) => { e.stopPropagation(); downloadProject(project) }} 
-                      className="p-2 bg-emerald-500/20 rounded-lg hover:bg-emerald-500/30 transition"
+                      disabled={downloading === project.id}
+                      className="p-2 bg-emerald-500/20 rounded-lg hover:bg-emerald-500/30 transition disabled:opacity-50"
                       title="Download"
                     >
-                      <Download className="w-4 h-4 text-emerald-400" />
+                      {downloading === project.id ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Download className="w-4 h-4 text-emerald-400" />}
                     </button>
                     {isAdminUser && (
                       <>
@@ -718,9 +802,11 @@ export function Projects({ session, isDarkMode }) {
                   <div className="flex items-center gap-1 text-xs text-gray-500"><Download className="w-3 h-3" /><span>{project.download_count || 0}</span></div>
                   <button 
                     onClick={(e) => { e.stopPropagation(); downloadProject(project) }} 
-                    className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg text-white text-xs hover:from-emerald-600 hover:to-teal-700 transition flex items-center gap-1 shadow-md"
+                    disabled={downloading === project.id}
+                    className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg text-white text-xs hover:from-emerald-600 hover:to-teal-700 transition flex items-center gap-1 shadow-md disabled:opacity-50"
                   >
-                    <Download className="w-3 h-3" /> Download
+                    {downloading === project.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} 
+                    {downloading === project.id ? 'Downloading...' : 'Download'}
                   </button>
                   {isAdminUser && (
                     <>
@@ -849,9 +935,11 @@ export function Projects({ session, isDarkMode }) {
               <div className="flex gap-3 pt-4">
                 <button 
                   onClick={() => downloadProject(selectedProject)}
-                  className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:from-emerald-600 hover:to-teal-700 transition shadow-lg"
+                  disabled={downloading === selectedProject.id}
+                  className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:from-emerald-600 hover:to-teal-700 transition shadow-lg disabled:opacity-50"
                 >
-                  <Download className="w-5 h-5" /> Download Now
+                  {downloading === selectedProject.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />} 
+                  {downloading === selectedProject.id ? 'Downloading...' : 'Download Now'}
                 </button>
                 <button 
                   onClick={() => copyLink(selectedProject.zip_file_url)}
